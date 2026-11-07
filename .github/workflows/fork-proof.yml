@@ -1,0 +1,31 @@
+name: fork-proof
+on:
+  push:
+    branches: ["ci/**"]
+permissions:
+  contents: read
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 3
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: fixed code passes
+        run: go test ./pkg/cli/namespaces/ -run getNamespaceOperators -v -count=1
+      - name: old list.go fails
+        run: |
+          git checkout HEAD~2 -- pkg/cli/namespaces/list.go
+          if go test ./pkg/cli/namespaces/ -run getNamespaceOperators -count=1 > old.txt 2>&1; then
+            cat old.txt; echo "UNEXPECTED: old code passed"; exit 1
+          fi
+          grep -E "panic|nil pointer|FAIL" old.txt | head -20
+          echo "EXPECTED: old code fails"
+      - name: whole package still passes
+        run: |
+          git checkout HEAD -- pkg/cli/namespaces/list.go
+          go test ./pkg/cli/namespaces/ -count=1
